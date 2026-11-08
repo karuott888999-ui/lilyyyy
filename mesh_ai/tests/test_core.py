@@ -10,6 +10,8 @@ class MeshCoreTests(unittest.TestCase):
         import importlib
         import mesh_ai.core as core
         self.core = importlib.reload(core)
+        import mesh_ai.graph_memory as graph_memory
+        self.graph = importlib.reload(graph_memory)
 
     def tearDown(self): self.temp.cleanup()
 
@@ -50,8 +52,7 @@ class MeshCoreTests(unittest.TestCase):
     def test_llm_requires_explicit_opt_in(self):
         with patch.object(self.core, '_ollama_chat') as chat:
             result = self.core.think('Tere', use_llm=False)
-            chat.assert_not_called()
-            self.assertEqual(result['provider'], 'demo-rules')
+            chat.assert_not_called(); self.assertEqual(result['provider'], 'demo-rules')
 
     def test_llm_never_accepts_remote_url(self):
         with patch.dict(os.environ, {'GHOST_MESH_OLLAMA_URL':'http://example.com:11434','GHOST_MESH_OLLAMA_MODEL':'model'}):
@@ -61,9 +62,24 @@ class MeshCoreTests(unittest.TestCase):
         with patch.dict(os.environ, {'GHOST_MESH_OLLAMA_URL':'http://127.0.0.1:11434','GHOST_MESH_OLLAMA_MODEL':'test-model'}), \
              patch.object(self.core, '_ollama_chat', side_effect=['alpha draft','beta critique','alpha final']) as chat:
             result = self.core.think('Kuidas testida?', use_llm=True)
-        self.assertEqual(chat.call_count, 3)
-        self.assertEqual(result['agents']['Beta'], 'beta critique')
-        self.assertEqual(result['final'], 'alpha final')
-        self.assertEqual(result['provider'], 'ollama-local')
+        self.assertEqual(chat.call_count, 3); self.assertEqual(result['agents']['Beta'], 'beta critique')
+        self.assertEqual(result['final'], 'alpha final'); self.assertEqual(result['provider'], 'ollama-local')
+
+    def test_graph_save_and_coordinator_traversal_is_bounded(self):
+        graph = {'title':'Teadmiste kaart','layers':[{'id':'L','name':'Kiht','color':'#123456','opacity':1,'visible':True,'locked':False,'strokes':[]}],
+                 'nodes':[{'id':'a','label':'Mesh','description':'lokaalne seadmete võrk','topic':'võrk','x':10,'y':20,'color':'#123456','layer':'L','tags':['mesh']},
+                          {'id':'b','label':'Mälu','description':'koordinaator meenutab seoseid','topic':'võrk','x':30,'y':40,'color':'#abcdef','layer':'L','tags':[]},
+                          {'id':'c','label':'Reegel','description':'kasutaja kinnitatud piirang','topic':'turve','x':50,'y':60,'color':'#abcdef','layer':'L','tags':[]}],
+                 'edges':[{'a':'a','b':'b','relation':'uses'},{'a':'b','b':'c','relation':'governs'}]}
+        self.graph.save_graph(graph)
+        result=self.graph.coordinate('Mesh',max_depth=2)
+        self.assertEqual(len(result['matches']),3)
+        self.assertTrue(any(len(p['node_ids'])==3 for p in result['paths']))
+        shallow=self.graph.coordinate('Mesh',max_depth=1)
+        self.assertLessEqual(len(shallow['matches']),2)
+
+    def test_graph_rejects_bad_edges_and_remote_graph_ids(self):
+        with self.assertRaises(ValueError): self.graph.coordinate('x',graph_id='../../other')
+        with self.assertRaises(ValueError): self.graph.validate_graph({'title':'x','layers':[],'nodes':[],'edges':[{'a':'no','b':'bad'}]})
 
 if __name__ == '__main__': unittest.main()
