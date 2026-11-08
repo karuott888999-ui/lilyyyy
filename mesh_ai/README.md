@@ -1,36 +1,34 @@
 # Ghost Mesh AI — kohaliku paneeli prototüüp
 
-See on eraldiseisev Python 3 rakendus kaustas `mesh_ai/`. See ei muuda Ghosti ega teisi reposid ega kutsu Ghosti API-t. Server kuulab ainult `127.0.0.1:8765`; märkmed ja tagasiside salvestatakse sinu arvutis SQLite faili `mesh_memory.sqlite3`.
+Eraldiseisev Python 3 rakendus `mesh_ai/` kaustas. See ei muuda Ghosti ega teisi reposid ega kutsu Ghosti API-t. Server kuulab ainult `127.0.0.1:8765`; märkmed jäävad kohaliku SQLite faili.
 
 ## Windowsi install
+PowerShellis: `irm https://raw.githubusercontent.com/karuott888999-ui/lilyyyy/copilot/ghost-mesh-panel/install.ps1 | iex`.
+Python 3.10+ peab olema paigaldatud. Installiskript käivitab localhost paneeli aadressil <http://127.0.0.1:8765>. Lõpeta Ctrl+C-ga. Käsitsi: `python -m mesh_ai`.
 
-PowerShellis:
+## LLM-i mõtlemise sisselülitamine
 
-```powershell
-irm https://raw.githubusercontent.com/karuott888999-ui/lilyyyy/copilot/ghost-mesh-panel/install.ps1 | iex
-```
-
-Skript küsib kinnitust, tõmbab selle repo haru ja kopeerib ainult `mesh_ai` rakenduse `%LOCALAPPDATA%\GhostMeshAI` alla. See ei muuda GitHubi repositooriumi. Python 3.10+ peab olema installitud ja `python` PATH-is. Avab veebipaneeli aadressil <http://127.0.0.1:8765>. Peata terminalis Ctrl+C-ga.
-
-Käsitsi käivitamine repo juurest:
+Paneel vaikimisi LLM-ile andmeid ei saada. Alpha/Beta linnuke on eraldi kasutaja nõusolek iga arutelu jaoks. Päris mudelirežiim vajab kohalikku Ollama teenust ja mudelit. Paigalda Ollama oma arvutisse ametlikust allikast, tõmba mudel ise alla ning käivita see. Seejärel määra enne paneeli käivitamist PowerShelli sessioonis näiteks:
 
 ```powershell
+$env:GHOST_MESH_OLLAMA_MODEL = 'sinu-kohaliku-mudeli-nimi'
 python -m mesh_ai
 ```
 
-## Funktsioonid ja ausad piirid
+Valikuline localhost URL on `GHOST_MESH_OLLAMA_URL`; vaikeväärtus on `http://127.0.0.1:11434`. Ainult `localhost`, `127.0.0.1` või `::1` HTTP aadressid aktsepteeritakse; väliseid URL-e ei lubata. Paneelis märgi „Kasuta seadistatud kohalikku Ollama mudelit”, et käivitada kolm piiratud mudelikõnet: Alpha esialgne vastus, Beta kriitika, Alpha süntees. Seadistus ja mudeli allalaadimine pole selle rakenduse poolt automaatsed.
 
-- Alpha ja Beta annavad kaks selgelt eristatud, reeglipõhist ülevaadet ning kasutavad küsimusega sobivaid kohalikke mälumärkmeid. Praegu pole ühendatud LLM-i: see prototüüp ei väida, et mudelid päriselt mõtlevad.
-- Märkmed toetavad värvi, teksti suurust, tähtsust ja silte. Mälu tugevus on seletatav vananemisskoor. Automaatset kustutamist pole; „Unusta“ arhiveerib, mitte ei kustuta pöördumatult.
-- Kasutaja saab paranduse talletada õppetunnina. Veasignaal arvutatakse tagasisidest; see ei ole päris viha ega tunne ning ei muuda koodi iseseisvalt.
-- Reeglid/habitsid jäävad `pending` olekusse kuni kasutaja kinnitab. Agendid ei muuda ise turva-, võrgu- ega süsteemiseadeid.
-- Rakendus ei tee pidevat veebiuuringut ega avatud interneti-/faili-/seadmejuurdepääsu. Kõik jääb kohalikuks.
-- Ghosti ühendus pole selles prototüübis aktiveeritud. Hilisem ühendus vajab Ghosti poolel eraldi API-d, autentimist, kasutaja nõusolekut ning privaatsus- ja turvateste.
+Kui mudel pole seadistatud, jääb süsteem demo-režiimi. Demo ei ole päris LLM ega sisuline arutlusmudel.
 
-## Arendus ja kontroll
+## Mälu ja unustamine
+- Kuni viis tekstilise vaste ning tähtsuse/vanuse skooriga valitud aktiivset märkust lisatakse arutelu konteksti. Paneel näitab valitud märkmete pealkirju.
+- Märkmeid ei saadeta LLM-ile, kui kasutaja pole arutelu juures linnukest märkinud. Ollama URL on ainult localhost.
+- „Arhiveeri” jätab kirje taastatavaks ja eemaldab selle aktiivsest mälust. „Kustuta jäädavalt” küsib teist kinnitust ja eemaldab kirje SQLite-ist.
+- Tagasisidest salvestatakse õppetund, aga see ei treeni ise mudeli kaalusid. Reegli soovitus tuleb kasutajal kinnitada.
 
-```powershell
-python -m unittest discover -s mesh_ai/tests -v
-```
+## Tunded
+Tarkvaral pole selle rakenduse väitel päris tundeid ega teadvust. Veatasemest kuvatav „pingesignaal” on deterministlik tagasisideindikaator, mitte viha. Seda võib muuta või kustutada kasutaja.
 
-Kasutaja andmebaas on rakenduse kaustas. Tee varukoopia enne kausta eemaldamist. Ära jaga `mesh_memory.sqlite3` faili, kui see sisaldab privaatseid märkmeid.
+## Andmed ja piirangud
+Andmebaas asub `GHOST_MESH_HOME` kaustas või vaikimisi `mesh_ai/mesh_memory.sqlite3`. Tee märkmetest enne kustutamist varukoopia. Rakendus ei tee veebiuuringut, ei skaneeri LAN-i, ei käivita suvalist koodi ega muuda ise AI lähtekoodi. AI loodud koodimuudatuste paneel pole veel teostatud. LAN-i ega Ghosti ühendust pole aktiveeritud.
+
+Testid: `python -m unittest discover -s mesh_ai/tests -v`.

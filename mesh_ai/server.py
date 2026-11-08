@@ -11,10 +11,10 @@ STATIC = ROOT / "static"
 MIME = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8"}
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "GhostMeshLocal/1.0"
+    server_version = "GhostMeshLocal/1.1"
 
     def log_message(self, fmt, *args):
-        # Do not log prompts, note content, or request bodies.
+        # Never log prompts, note content, or request bodies.
         print("[mesh] " + (fmt % args).split("?")[0])
 
     def _json(self, status, value):
@@ -25,17 +25,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def _body(self):
         length = int(self.headers.get("Content-Length", "0"))
-        if length < 0 or length > 16_384:
-            raise ValueError("Päring on liiga suur")
+        if length < 0 or length > 16_384: raise ValueError("Päring on liiga suur")
         value = json.loads(self.rfile.read(length) or b"{}")
-        if not isinstance(value, dict):
-            raise ValueError("JSON peab olema objekt")
+        if not isinstance(value, dict): raise ValueError("JSON peab olema objekt")
         return value
 
     def _allowed_origin(self):
         host = self.headers.get("Host", "").split(":", 1)[0].lower()
-        if host not in {"127.0.0.1", "localhost", "::1"}:
-            return False
+        if host not in {"127.0.0.1", "localhost", "::1"}: return False
         origin = self.headers.get("Origin")
         return not origin or origin in {"http://127.0.0.1:8765", "http://localhost:8765"}
 
@@ -43,7 +40,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._allowed_origin(): return self._json(403, {"error": "Ainult kohalik ühendus"})
         path = urlparse(self.path).path
         if path == "/api/state": return self._json(200, core.state())
-        if path == "/api/notes": return self._json(200, {"notes": core.list_notes(), "archived": core.list_notes(True) if False else []})
+        if path == "/api/notes": return self._json(200, {"notes": core.list_notes(), "archived": core.list_notes(True)})
         if path == "/api/rules": return self._json(200, {"rules": core.get_rules()})
         if path == "/": path = "/index.html"
         file = (STATIC / path.lstrip("/")).resolve()
@@ -56,27 +53,27 @@ class Handler(BaseHTTPRequestHandler):
         if not self._allowed_origin(): return self._json(403, {"error": "Ainult kohalik ühendus"})
         try:
             body = self._body(); path = urlparse(self.path).path
-            if path == "/api/think": result = core.think(body.get("prompt"))
+            if path == "/api/think": result = core.think(body.get("prompt"), bool(body.get("use_llm", False)))
             elif path == "/api/notes": result = {"note": core.create_note(body.get("title"), body.get("body"), body.get("color", "blue"), body.get("size", 16), body.get("importance", 3), body.get("tags", []))}
             elif path == "/api/feedback": result = core.record_feedback(body.get("agent"), body.get("correction"))
             elif path == "/api/rules": result = {"rule": core.suggest_rule(body.get("body"))}
+            elif path.startswith("/api/notes/") and path.endswith("/forget"):
+                note_id = unquote(path[len("/api/notes/"):-len("/forget")].strip("/"))
+                result = {"ok": core.permanently_delete_note(note_id, body.get("confirmation", ""))}
             else: return self._json(404, {"error": "Marsruuti pole"})
             return self._json(200, result)
-        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        except (ValueError, TypeError, json.JSONDecodeError, RuntimeError) as exc:
             return self._json(400, {"error": str(exc)})
 
     def do_PATCH(self):
         if not self._allowed_origin(): return self._json(403, {"error": "Ainult kohalik ühendus"})
         try:
             body = self._body(); path = urlparse(self.path).path.split("/")
-            if len(path) == 4 and path[1] == "api" and path[2] == "notes":
-                ok = core.archive_note(unquote(path[3]), bool(body.get("archived", True)))
-            elif len(path) == 4 and path[1] == "api" and path[2] == "rules":
-                ok = core.set_rule(unquote(path[3]), body.get("status", "pending"))
+            if len(path) == 4 and path[1] == "api" and path[2] == "notes": ok = core.archive_note(unquote(path[3]), bool(body.get("archived", True)))
+            elif len(path) == 4 and path[1] == "api" and path[2] == "rules": ok = core.set_rule(unquote(path[3]), body.get("status", "pending"))
             else: return self._json(404, {"error": "Marsruuti pole"})
             return self._json(200 if ok else 404, {"ok": ok})
-        except (ValueError, TypeError, json.JSONDecodeError) as exc:
-            return self._json(400, {"error": str(exc)})
+        except (ValueError, TypeError, json.JSONDecodeError) as exc: return self._json(400, {"error": str(exc)})
 
     def do_DELETE(self):
         if not self._allowed_origin(): return self._json(403, {"error": "Ainult kohalik ühendus"})
